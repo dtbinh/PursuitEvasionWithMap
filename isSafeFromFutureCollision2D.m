@@ -1,4 +1,6 @@
 function isSafe = isSafeFromFutureCollision2D(ttf,xp1,A_tr,B_tr,uhist,wallPoints,numObj)
+%old generic versoin, only handles 2D collisions.  Models objects as
+%straight-line point pairs
 contloop=true;
 ncount=0;
 isSafe=true;

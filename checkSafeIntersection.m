@@ -13,9 +13,14 @@ uDen=cross2(r,s);
 uNum=cross2(q1-p1,r);
 
 if abs(uDen) <= 1e-4
-    if abs(uNum)<1e-4
-        safeVal=0; %colinear
-        fprintf('Colinear')
+    if abs(uNum)<1e-4 && norm(r)>1e-4 && norm(s)>1e-4
+        t0=dot((q1-p1),r)/dot(r,r);
+        t1=t0+dot(s,r)/dot(r,r);
+        if ~(t1<=0 || t0 >=1)
+            safeVal=0;
+        else
+            safeVal=1;
+        end
     else
         safeVal=1;
     end

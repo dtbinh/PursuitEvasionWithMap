@@ -7,5 +7,6 @@ b=[[1;.9] [4;.9] [4;1.1] [1;1.1]];
 axisSet=[-1 6 -1 3]; %axes for use in wall plot
 wallPoints={a,b};
 numObj=length(wallPoints);
+derptest={a,b};
 
 

@@ -5,18 +5,20 @@ clear;clc;
 %work out better metric for safe shifting to account for covariance matrix
 %shift wall by virtual wall amount in isSafeFromFutureCollision
 
-tmax=10;
+tmax=4;
 lookAheadTime=1; %number of steps to look ahead in optimization; set 0 to use t_remaining instead
 dt=1;
 MCmax=1;
 nSim=ceil(tmax/dt); %simulation time within MC
+fineificationSteps=2; %no refinement if ==0
+scaleRed=8; %each fineification step has scaleRed+1 elements in each state. DO NOT USE <2
 %nSim=1;
-virtualWallWidth=.01; %if within vWW of wall, only consider strategies that
+virtualWallWidth=0; %if within vWW of wall, only consider strategies that
                      %move away from the wall.  Set ==0 to ignore.
 
 flagDiminishHorizonNearNSim=1;  %if ==1, consider lookAheadTime
          %if TRemain>lookAheadTime, use TRemain if TRemain<lookAheadTime
-flagUseDetm=1;  %zero noise if flag==1
+flagUseDetm=0;  %zero noise if flag==1
 flagUseFeedback=0; %generate control history via feedback
 flagUseModeControlInsteadOfMean=1;
 
@@ -37,8 +39,7 @@ nZ=2*nX;
 eStore=zeros(nX,nSim,MCmax);
 
 for MCL=1:MCmax
-    
-    
+        
     uphist=[];
     uehist=[];
     
@@ -53,10 +54,10 @@ for MCL=1:MCmax
     P0=.1*eyeNX;
     P0stack=[P0 zerosNX; zerosNX P0];
     P_pur=P0stack; P_eva=P0stack;
-    Q0p=.0001*eye(nV); %process noise, pursuer
-    Q0e=.0001*eye(nV);
+    Q0p=.00001*eye(nV); %process noise, pursuer
+    Q0e=.00001*eye(nV);
     Q0stack=[Q0p zerosHalfNX; zerosHalfNX Q0e];
-    R0P=.0005*eye(nZ); %measurement noise
+    R0P=.00005*eye(nZ); %measurement noise
     R0E=R0P;
     cholQ0p_T=chol(Q0p)';
     cholQ0e_T=chol(Q0e)';
@@ -94,7 +95,7 @@ for MCL=1:MCmax
     normpdf_diag_DEBUG=.01; %with high confidence, diagonal elements of normpdf matrix go to zero
     
     
-    xEva=[1;.4;0;0];
+    xEva=[1;.35;0;0];
     xPur=[.1;.3;.1;0];
     
     umaxPur=.5;
@@ -221,89 +222,52 @@ for MCL=1:MCmax
             else
                 ttf=lookAheadTime;
             end
+%             
+%             uconPtemp=uConMat_Rt(ttf,uPconst,uPtheta);
+%             uconEtemp=uConMat_Rt(ttf,uEconst,uEtheta);
+        end
+        
+        uPthetaskipP=15*pi/180; uEthetaskipP=15*pi/180;
+        uPconstskipP=.1; uEconstskipP=.1;
+        uPthetaskipE=uPthetaskipP; uEthetaskipE=uEthetaskipP;
+        uPconstskipE=.1; uEconstskipE=.1;
+        uPthetaP = 0:uPthetaskipP:2*pi-uPthetaskipP; %.177
+        uPconstP = .1:uPconstskipP:.5;
+        uEthetaP = 0:uEthetaskipP:2*pi-uEthetaskipP; %.097
+        uEconstP = .1:uEconstskipP:.5;
+        uPthetaE = 0:uPthetaskipE:2*pi-uPthetaskipP; %.177
+        uPconstE = .1:uPconstskipE:.5;
+        uEthetaE = 0:uEthetaskipE:2*pi-uEthetaskipP; %.097
+        uEconstE = .1:uEconstskipE:.5;
+        
+        for jk=1:fineificationSteps+1
+            %get NE controls
+            [uPurTrue,uEvaExpected]=generateCullSolveProcess(ttf,uPconstP,uPthetaP,uEconstP,uEthetaP,xPpur,xEpur,virtualWallWidth);
+            [uPurExpected,uEvaTrue]=generateCullSolveProcess(ttf,uPconstE,uPthetaE,uEconstE,uEthetaE,xPeva,xEeva,virtualWallWidth);
             
-            
-            uPtheta = 0:15*pi/180:2*pi; %.177
-            uPconst = .1:.1:.5;
-            uEtheta = 0:15*pi/180:2*pi; %.097
-            uEconst = .1:.1:.5;
-            
-            uconPtemp=uConMat_Rt(ttf,uPconst,uPtheta);
-            uconEtemp=uConMat_Rt(ttf,uEconst,uEtheta);
-        end
-        if max(uPconst)>umaxPur || max(uEconst)>umaxEva
-            fprintf('Warning: Exceeding maximum thrust\n');
-        end
-        
-        [a1,a2,a3,~]=size(uconPtemp);
-        uconPcull=zeros(a1,a2,a3,2);
-        [a1,a2,a3,~]=size(uconEtemp);
-        uconEcull=zeros(a1,a2,a3,2);
-        nmod_pur_tmep=length(uconPtemp); nmod_eva_temp=length(uconEtemp);
-        %remove collision points from map; technically, each party should
-        %create their own uconCull mats but whatever
-        mapEdges; %load wall locations into memory
-        nearestWallIndex=0; nearestWallDist=0; nearestWallPointPair=0;
-        numSafeControls=0;
-        for i1=1:nmod_pur_tmep
-            uhist=uconPtemp(:,:,:,i1);  %Should check for collisions from x0=left of quad and x0=right of quad
-            isControlSafe=isSafeFromFutureCollision(ttf,xPpur,A_tr,B_tr,uhist,wallPoints,numObj,virtualWallWidth);
-            if isControlSafe==1
-                numSafeControls=numSafeControls+1;
-                uconPcull(:,:,:,numSafeControls)=uconPtemp(:,:,:,i1);
-            end
-        end
-        uconPcull=uconPcull(:,:,:,1:numSafeControls); %removes [0;0] controls added when initializing
-        nmod_pur=length(uconPcull);
-        numSafeControls=0;
-        for i1=1:nmod_eva_temp
-            uhist=uconEtemp(:,:,:,i1);
-            isControlSafe=isSafeFromFutureCollision(ttf,xEeva,A_tr,B_tr,uhist,wallPoints,numObj,virtualWallWidth);
-            if isControlSafe
-                numSafeControls=numSafeControls+1;
-                uconEcull(:,:,:,numSafeControls)=uconEtemp(:,:,:,i1);
-            end
-        end
-        uconEcull=uconEcull(:,:,:,1:numSafeControls); %removes [0;0] controls added when initializing
-        nmod_eva=length(uconEcull);
-        
-        hP=ttf*ones(nmod_pur,1); %horizon length for pursuer, must define AFTER nmod calculation
-        hE=ttf*ones(nmod_eva,1);
-        KmatP=[];
-        KmatE=[];
-        
-        uclassVecPpur=zeros(nmod_pur,1); uclassVecEpur=zeros(nmod_eva,1);
-        uclassVecPeva=zeros(nmod_pur,1); uclassVecEeva=zeros(nmod_eva,1);
-        
-        strategiesE=struct('constant',uconEcull,'horizon',hE);
-        strategiesP=struct('constant',uconPcull,'horizon',hP);
-        %KmatE, KmatP are nu x nx x T x nmodE/nmodP feedback matrices,
-        %where T is the maximum time horizon considered
-        [JpPur,JePur]=generateCostMatrices(strategiesP,strategiesE,xPpur,xEpur,0);
-        [JpEva,JeEva]=generateCostMatrices(strategiesP,strategiesE,xPeva,xEeva,0);
-        
-        %convert cost matrices to payoff matrices
-        VpPur = -JpPur;
-        VePur = -JePur;
-        VpEva = -JpEva;
-        VeEva = -JeEva;
-        [eqLocP,nashReturnFlagP,~]=findRDEq(VpPur,VePur);
-        [eqLocE,nashReturnFlagE,~]=findRDEq(VpEva,VeEva);
-        %Process equilibria into controls
-        if nashReturnFlagP>=1 %if there IS an RDEq
-            uClassPp=eqLocP(1,1);
-            uClassEp=eqLocP(2,1);
-            [uPurTrue,uEvaExpected] = processNashType1(eqLocP,umaxPur,umaxEva,uconPcull,uconEcull);
-        elseif nashReturnFlagP==0 %suboptimal
-            fprintf('Running LH2')
-            %split for efficiency
-            [uPurTrue,uEvaExpected] = processNashType0(VpPur,VePur,umaxPur,umaxEva,uconPcull,uconEcull);
-        end
-        if nashReturnFlagE>=1
-            [uPurExpected,uEvaTrue] = processNashType1(eqLocE,umaxPur,umaxEva,uconPcull,uconEcull);
-        elseif nashReturnFlagE==0 %suboptimal
-            fprintf('Running LH2')
-            [uPurExpected,uEvaTrue] = processNashType0(VpEva,VeEva,umaxPur,umaxEva,uconPcull,uconEcull);
+            %The next block finds the local NE neighborhood, set up finer discretization (xAyB~x of P from perspective of B)
+            %
+            %extracting true parameters from optimal controls
+            uPconstCenterP=norm(uPurTrue); uEconstCenterP=norm(uEvaExpected);
+            uEconstCenterE=norm(uEvaTrue); uPconstCenterE=norm(uPurExpected);
+            uPthetaCenterP=atan2(uPurTrue(2),uPurTrue(1)); uEthetaCenterP=atan2(uEvaExpected(2),uEvaExpected(1));
+            uEthetaCenterE=atan2(uEvaTrue(2),uEvaTrue(1)); uPthetaCenterE=atan2(uPurExpected(2),uPurExpected(1));
+            %uconP,uconE from pursuer perspective.  Mesh is refined by
+            %scaleRed but the reduced scale is not stored
+            uPconstP=max(0,uPconstCenterP-uPconstskipP):uPconstskipP*2/scaleRed:min(uPconstCenterP+uPconstskipP,umaxPur);
+            uEconstP=max(0,uEconstCenterP-uEconstskipP):uEconstskipP*2/scaleRed:min(uEconstCenterP+uEconstskipP,umaxEva);
+            uPthetaP=uPthetaCenterP-uPthetaskipP : uPthetaskipP*2/scaleRed : uPthetaCenterP+uPthetaskipP;
+            uEthetaP=uEthetaCenterP-uEthetaskipP : uEthetaskipP*2/scaleRed : uEthetaCenterP+uEthetaskipP;
+            %uconP, uconE from evader perspective
+            uPconstE=max(0,uPconstCenterE-uPconstskipE):uPconstskipE*2/scaleRed:min(uPconstCenterE+uPconstskipE,umaxPur);
+            uEconstE=max(0,uEconstCenterE-uEconstskipE):uEconstskipE*2/scaleRed:min(uEconstCenterE+uEconstskipE,umaxEva);
+            uPthetaE=uPthetaCenterE-uPthetaskipE : uPthetaskipE*2/scaleRed : uPthetaCenterE+uPthetaskipE;
+            uEthetaE=uEthetaCenterE-uEthetaskipE : uEthetaskipE*2/scaleRed : uEthetaCenterE+uEthetaskipE;
+            %stores new mesh size
+            uPconstskipP=uPconstskipP*2/scaleRed; uPthetaskipP=uPthetaskipP*2/scaleRed;
+            uEconstskipP=uEconstskipP*2/scaleRed; uEthetaskipP=uEthetaskipP*2/scaleRed;
+            uPconstskipE=uPconstskipE*2/scaleRed; uPthetaskipE=uPthetaskipE*2/scaleRed;
+            uEconstskipE=uEconstskipE*2/scaleRed; uEthetaskipE=uEthetaskipE*2/scaleRed;
         end
         
         uphist=[uphist uPurTrue];
@@ -386,8 +350,87 @@ for MCL=1:MCmax
 end
 
 
-
-
+% 
+%         if max(uPconst)>umaxPur || max(uEconst)>umaxEva
+%             fprintf('Warning: Exceeding maximum thrust\n');
+%         end
+%         
+%         [a1,a2,a3,~]=size(uconPtemp);
+%         uconPcull=zeros(a1,a2,a3,2);
+%         [a1,a2,a3,~]=size(uconEtemp);
+%         uconEcull=zeros(a1,a2,a3,2);
+%         nmod_pur_temp=length(uconPtemp); nmod_eva_temp=length(uconEtemp);
+%         %remove collision points from map; technically, each party should
+%         %create their own uconCull mats but whatever
+%         mapEdges; %load wall locations into memory
+%         nearestWallIndex=0; nearestWallDist=0; nearestWallPointPair=0;
+%         numSafeControls=0;
+%         for i1=1:nmod_pur_temp
+%             uhist=uconPtemp(:,:,:,i1);  %Should check for collisions from x0=left of quad and x0=right of quad
+%             isControlSafe=isSafeFromFutureCollision(ttf,xPpur,A_tr,B_tr,uhist,wallPoints,numObj,virtualWallWidth);
+%             if isControlSafe==1
+%                 numSafeControls=numSafeControls+1;
+%                 uconPcull(:,:,:,numSafeControls)=uconPtemp(:,:,:,i1);
+%             end
+%         end
+%         uconPcull=uconPcull(:,:,:,1:numSafeControls); %removes [0;0] controls added when initializing
+%         nmod_pur=length(uconPcull);
+%         numSafeControls=0;
+%         nWDstore=[];
+%         for i1=1:nmod_eva_temp
+%             uhist=uconEtemp(:,:,:,i1);
+%             [isControlSafe,nWI,nPPI,nWD]=isSafeFromFutureCollision(ttf,xEeva,A_tr,B_tr,uhist,wallPoints,numObj,virtualWallWidth);
+%             nWDstore=[nWDstore nWD];
+%             if isControlSafe
+%                 %fprintf('foundsafeE\n')
+%                 numSafeControls=numSafeControls+1;
+%                 uconEcull(:,:,:,numSafeControls)=uconEtemp(:,:,:,i1);
+%             end
+%         end
+%         uconEcull=uconEcull(:,:,:,1:numSafeControls); %removes [0;0] controls added when initializing
+%         nmod_eva=length(uconEcull);
+%         
+%         hP=ttf*ones(nmod_pur,1); %horizon length for pursuer, must define AFTER nmod calculation
+%         hE=ttf*ones(nmod_eva,1);
+%         KmatP=[];
+%         KmatE=[];
+%         
+%         uclassVecPpur=zeros(nmod_pur,1); uclassVecEpur=zeros(nmod_eva,1);
+%         uclassVecPeva=zeros(nmod_pur,1); uclassVecEeva=zeros(nmod_eva,1);
+%         
+%         strategiesE=struct('constant',uconEcull,'horizon',hE);
+%         strategiesP=struct('constant',uconPcull,'horizon',hP);
+%         %KmatE, KmatP are nu x nx x T x nmodE/nmodP feedback matrices,
+%         %where T is the maximum time horizon considered
+%         [JpPur,JePur]=generateCostMatrices(strategiesP,strategiesE,xPpur,xEpur,0);
+%         [JpEva,JeEva]=generateCostMatrices(strategiesP,strategiesE,xPeva,xEeva,0);
+%         
+%         %convert cost matrices to payoff matrices
+%         VpPur = -JpPur;
+%         VePur = -JePur;
+%         VpEva = -JpEva;
+%         VeEva = -JeEva;
+%         [eqLocP,nashReturnFlagP,~]=findRDEq(VpPur,VePur);
+%         [eqLocE,nashReturnFlagE,~]=findRDEq(VpEva,VeEva);
+%         %Process equilibria into controls
+%         %NOTE: For readability, this could be made into a function to be
+%         %called twice but this would require passing large matrices to a
+%         %function that may not use them.  The choice is deliberate here.
+%         if nashReturnFlagP>=1 %if there IS an RDEq
+%             uClassPp=eqLocP(1,1);
+%             uClassEp=eqLocP(2,1);
+%             [uPurTrue,uEvaExpected] = processNashType1(eqLocP,umaxPur,umaxEva,uconPcull,uconEcull);
+%         elseif nashReturnFlagP==0 %suboptimal
+%             fprintf('Running LH2\n')
+%             %split for efficiency
+%             [uPurTrue,uEvaExpected] = processNashType0(VpPur,VePur,umaxPur,umaxEva,uconPcull,uconEcull);
+%         end
+%         if nashReturnFlagE>=1
+%             [uPurExpected,uEvaTrue] = processNashType1(eqLocE,umaxPur,umaxEva,uconPcull,uconEcull);
+%         elseif nashReturnFlagE==0 %suboptimal
+%             fprintf('Running LH2')
+%             [uPurExpected,uEvaTrue] = processNashType0(VpEva,VeEva,umaxPur,umaxEva,uconPcull,uconEcull);
+%         end
 
 
 
