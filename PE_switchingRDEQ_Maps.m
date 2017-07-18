@@ -5,7 +5,7 @@ clear;clc;
 %work out better metric for safe shifting to account for covariance matrix
 %shift wall by virtual wall amount in isSafeFromFutureCollision
 
-tmax=4;
+tmax=10;
 lookAheadTime=1; %number of steps to look ahead in optimization; set 0 to use t_remaining instead
 dt=1;
 MCmax=1;
@@ -95,7 +95,7 @@ for MCL=1:MCmax
     normpdf_diag_DEBUG=.01; %with high confidence, diagonal elements of normpdf matrix go to zero
     
     
-    xEva=[1;.35;0;0];
+    xEva=[1;.45;0;0];
     xPur=[.1;.3;.1;0];
     
     umaxPur=.5;

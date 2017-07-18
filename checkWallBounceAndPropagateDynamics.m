@@ -74,6 +74,7 @@ else
             xS=A_temp*xS+B_temp*ucon+Gamma_temp*nPvec;
             
             ucon=dot(u_control,wallVec)*sign(dot(u_control,wallVec))*wallVec;
+            xS(nX/2+1:nX)=dot(xS(nX/2+1:nX),wallVec)*sign(dot(xS(nX/2+1:nX),wallVec))*wallVec
         end
         
         if iter>=50 || tt>=dt

@@ -1,4 +1,4 @@
-function [uPur,uEva] = generateCullSolveProcess(ttf,uPconst,uPtheta,uEconst,uEtheta,xPurEst,xEvaEst,vWW)
+function [uPur,uEva] = generateCullSolveProcess(ttf,uPconst,uPtheta,uEconst,uEtheta,xPurEst,xEvaEst,vWW,A_tr,B_tr)
 %generates uconMat, culls for collisions, solves the game, and then processes into controls
 %designed for *polar* controls only
 %set vWW=-1 for free space action
@@ -13,8 +13,10 @@ umaxEva=umaxEvaGG;
 eyeHalfNX=eye(nX/2);
 zerosHalfNX=zeros(nX/2,nX/2);
 
-A_tr=[eyeHalfNX (1*dt-cdd*dt^2/2)*eyeHalfNX; zerosHalfNX (1-cdd*dt)*eyeHalfNX];
-B_tr=[dt^2/2*eyeHalfNX; dt*eyeHalfNX];
+if nargin<=8
+    A_tr=[eyeHalfNX (1*dt-cdd*dt^2/2)*eyeHalfNX; zerosHalfNX (1-cdd*dt)*eyeHalfNX];
+    B_tr=[dt^2/2*eyeHalfNX; dt*eyeHalfNX];
+end
 
 uconPtemp=uConMat_Rt(ttf,uPconst,uPtheta);
 if max(uconPtemp)>umaxPur
