@@ -10,7 +10,7 @@ function [isSafe,nWI,nPPI,nWD] = isSafeFromFutureCollision(ttf,xp1,A_tr,B_tr,...
 %The return argument isSafe is thus:
 %(a) if it is NOT already behind a virtual wall, then isSafe=1 IFF it does not
 %break through a virtual wall
-%(b) if it is already behidn a virtual wall, then isSafe=1 IFF if it moves
+%(b) if it is already behind a virtual wall, then isSafe=1 IFF if it moves
 %through the virtual wall to safety and does NOT break through another
 %virtual wall
 
@@ -61,7 +61,7 @@ else
     if nWD_temp<virtualWallWidth
         
         %DO STUFF HERE
-                %same loop as before but only consider strategies that "collide" with
+        %same loop as before but only consider strategies that "collide" with
         %shifted virtual wall
         countPassagesThroughVW=0;
         while contloop %break loop immediately if collision flag seen OR if the chosen strategy doesn't go through the wall
@@ -70,18 +70,24 @@ else
             xp2=A_tr*xp1+B_tr*uhist(:,:,ncount);
             xp2Shift=xp2*1; %work out better safe shifting metric
             for i2=1:numObj
-                wpt=wallPoints{i2};
-                nl=length(wpt);
+                wpttemp=wallPoints{i2};
+                wpt=[wpttemp wpttemp wpttemp]; %for wraparound
+                nl=length(wpttemp);
                 for i3=1:nl
-                    p1=wpt(:,i3);
-                    if i3<nl; p2=wpt(:,i3+1); else; p2=wpt(:,1);end %more efficient wraparound
+                    p1=wpt(:,nl+i3);
+                    p2=wpt(:,nl+i3+1);
                     
-                    
-                    %DO STUFF HERE
-                    p1shift=p1;
-                    p2shift=p2;
-                    
-                    
+                    if i2==nWI_temp && i3==nPPI_temp
+                        p0=wpt(:,nl+i3-1); %point before this one 
+                        p01vec=p1-p0;
+                        p1shift=p1-virtualWallWidth*unit_vector(p01vec);
+                        p3=wpt(:,nl+i3+2);
+                        p23vec=p3-p2;
+                        p2shift=p2-virtualWallWidth*unit_vector(p23vec);
+                    else
+                        p1shift=p1;
+                        p2shift=p2;
+                    end
                     
                     %see if chosen strategy breaks through wall
                     isSafeThis_temp=checkSafeIntersection(xp1(1:nX/2),xp2Shift(1:nX/2),p1shift,p2shift);

@@ -36,6 +36,11 @@ nmod_pur_temp=length(uconPtemp); nmod_eva_temp=length(uconEtemp);
 %create their own uconCull mats but whatever
 
 mapEdges; %load wall locations into memory
+JhitvelP=0;
+JhitvelE=JhitvelP;
+JwallPushbackP=.01;
+JwallPushbackE=JwallPushbackP;
+jhit0=15; %relative speed cushion for wall impact
 
 if vWW==-1
     uconPcull=uconPtemp;
@@ -45,15 +50,21 @@ if vWW==-1
 else
     numSafeControls=0;
     for i1=1:nmod_pur_temp
-        uhist=uconPtemp(:,:,:,i1);  %Should check for collisions from x0=left of quad and x0=right of quad
+        uhist=uconPtemp(:,:,:,i1);  %Should check for collisions from x0=left of player and x0=right of player
         isControlSafe=isSafeFromFutureCollision(ttf,xPurEst,A_tr,B_tr,uhist,wallPoints,numObj,vWW);
         if isControlSafe==1
             numSafeControls=numSafeControls+1;
             uconPcull(:,:,:,numSafeControls)=uconPtemp(:,:,:,i1);
         end
     end
-    uconPcull=uconPcull(:,:,:,1:numSafeControls); %removes [0;0] controls added when initializing
+    if numSafeControls>=5
+        uconPcull=uconPcull(:,:,:,1:numSafeControls); %removes [0;0] controls added when initializing
+    else
+        uconPcull=uconPtemp;
+        JhitvelP=jhit0;
+    end
     nmod_pur=length(uconPcull);
+    
     numSafeControls=0;
     for i1=1:nmod_eva_temp
         uhist=uconEtemp(:,:,:,i1);
@@ -64,9 +75,15 @@ else
             uconEcull(:,:,:,numSafeControls)=uconEtemp(:,:,:,i1);
         end
     end
-    uconEcull=uconEcull(:,:,:,1:numSafeControls); %removes [0;0] controls added when initializing
+    if numSafeControls>=5
+        uconEcull=uconEcull(:,:,:,1:numSafeControls); %removes [0;0] controls added when initializing
+    else
+        uconEcull=uconEtemp;
+        JhitvelE=jhit0;
+    end
     nmod_eva=length(uconEcull);
 end
+
 
 hP=ttf*ones(nmod_pur,1); %horizon length for pursuer, must define AFTER nmod calculation
 hE=ttf*ones(nmod_eva,1);
@@ -74,7 +91,7 @@ hE=ttf*ones(nmod_eva,1);
 strategiesE=struct('constant',uconEcull,'horizon',hE);
 strategiesP=struct('constant',uconPcull,'horizon',hP);
 
-[Jpur,Jeva]=generateCostMatrices(strategiesP,strategiesE,xPurEst,xEvaEst,0);
+[Jpur,Jeva]=generateCostMatrices_map(strategiesP,strategiesE,xPurEst,xEvaEst,0,JwallPushbackP,JwallPushbackE,JhitvelP,JhitvelE);
 [eqLoc,nashReturnFlag,~]=findRDEq(-Jpur,-Jeva); %pass value matrices rather than cost matrices
 if nashReturnFlag>=1 %if there IS an RDEq
     [uPur,uEva] = processNashType1(eqLoc,umaxPur,umaxEva,uconPcull,uconEcull);

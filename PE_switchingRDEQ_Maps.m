@@ -2,23 +2,30 @@ clear;clc;
 %closes the loop for control switching in cluttered maps
 
 %NOTES
-%work out better metric for safe shifting to account for covariance matrix
-%shift wall by virtual wall amount in isSafeFromFutureCollision
+% work out better metric for safe shifting to account for covariance matrix
+% shift wall by virtual wall amount in isSafeFromFutureCollision
+% vWW handling would be better if it provided a "reward" for moving away
+%   from the wall rather than culling those that don't move away
+%
+%BUGS
+%If a point is exactly vWW away from a wall, then all controls are unsafe
+%vWW is still rejecting all controls if too close
 
-tmax=10;
+tmax=25;
 lookAheadTime=1; %number of steps to look ahead in optimization; set 0 to use t_remaining instead
 dt=1;
 MCmax=1;
 nSim=ceil(tmax/dt); %simulation time within MC
-fineificationSteps=2; %no refinement if ==0
+fineificationSteps=1; %no refinement if ==0
 scaleRed=8; %each fineification step has scaleRed+1 elements in each state. DO NOT USE <2
 %nSim=1;
 virtualWallWidth=0; %if within vWW of wall, only consider strategies that
-                     %move away from the wall.  Set ==0 to ignore.
+                     %move away from the wall.  Set ==0 to ignore.  Set ==-1
+                     %for free space
 
 flagDiminishHorizonNearNSim=1;  %if ==1, consider lookAheadTime
          %if TRemain>lookAheadTime, use TRemain if TRemain<lookAheadTime
-flagUseDetm=0;  %zero noise if flag==1
+flagUseDetm=1;  %zero noise if flag==1
 flagUseFeedback=0; %generate control history via feedback
 flagUseModeControlInsteadOfMean=1;
 
@@ -43,7 +50,7 @@ for MCL=1:MCmax
     uphist=[];
     uehist=[];
     
-    cdd=.4; %drag coefficient, =0 to ignore
+    cdd=.25; %drag coefficient, =0 to ignore
     eyeNX=eye(nX); eyeHalfNX=eye(nX/2);
     zerosNX=zeros(nX,nX); zerosHalfNX=zeros(nX/2,nX/2);
     A_tr=[eyeHalfNX (1*dt-cdd*dt^2/2)*eyeHalfNX; zerosHalfNX (1-cdd*dt)*eyeHalfNX];
@@ -67,12 +74,12 @@ for MCL=1:MCmax
     %cost matrices
     QfPur=8*[eyeHalfNX zerosHalfNX; zerosHalfNX zerosHalfNX];
     QstepPur=zeros(nX,nX);
-    RPur=15*eye(nU);  %NOTE: discrete R = continuous R*dt^2
+    RPur=25*eye(nU);  %NOTE: discrete R = continuous R*dt^2
     RPurScaled=RPur*dt^2;
     
     QfEva=5*[eyeHalfNX zerosHalfNX; zerosHalfNX zerosHalfNX];
     QstepEva=zeros(nX,nX);
-    REva=12*eye(nU);
+    REva=.01*eye(nU);
     REvaScaled=REva*dt^2;
     global QfEvaGG QfPurGG QstepEvaGG QstepPurGG REvaGG QnoisePGG QnoiseEGG...
         RPurGG umaxPurGG umaxEvaGG nXGG QnoiseGG dtGG cddGG nUGG%#ok
@@ -95,11 +102,11 @@ for MCL=1:MCmax
     normpdf_diag_DEBUG=.01; %with high confidence, diagonal elements of normpdf matrix go to zero
     
     
-    xEva=[1;.45;0;0];
-    xPur=[.1;.3;.1;0];
+    xEva=[1;.3;0;0];
+    xPur=[.11;.45;.1;0];
     
-    umaxPur=.5;
-    umaxEva=.5;
+    umaxPur=.1;
+    umaxEva=.1;
     umaxPurGG=umaxPur; umaxEvaGG=umaxEva;
     JpurRunning=0;  %FOR COMPARISON WITH KUMARV2 ONLY
     JevaRunning=0;
@@ -147,17 +154,7 @@ for MCL=1:MCmax
         evaPlot=plot(xEva(1),xEva(2),'r*');
         axis(axisSet);
     end
-        
-    
-    %set randn's seed RNG
-    n_seed = round(sum(clock*100));
-    randn('state', n_seed);
-    
-    ehat0=xEva-xPur+(chol(P0))'*randn(nX,1);
-    if flagUseDetm==1
-        ehat0=xEva-xPur; %deterministic behavior
-    end
-    ehat_prev_eva=ehat0;
+
     
     Pstore_eva=zeros(nX,nX,nmod_eva,nSim);
     Pstore_eva(:,:,1,1)=P0;
@@ -176,10 +173,6 @@ for MCL=1:MCmax
     
     %----- Simulation parameters
     tkhist = [0:nSim]'*dt;
-    
-    %----- Random number seed
-    n_seed = round(sum(clock*100));
-    randn('state', n_seed);
     
     global umax_GG %#ok<TLEV,NUSED>
     
@@ -227,18 +220,18 @@ for MCL=1:MCmax
 %             uconEtemp=uConMat_Rt(ttf,uEconst,uEtheta);
         end
         
-        uPthetaskipP=15*pi/180; uEthetaskipP=15*pi/180;
-        uPconstskipP=.1; uEconstskipP=.1;
+        uPthetaskipP=30*pi/180; uEthetaskipP=uPthetaskipP;
+        uPconstskipP=umaxPur/5; uEconstskipP=umaxEva/5;
         uPthetaskipE=uPthetaskipP; uEthetaskipE=uEthetaskipP;
-        uPconstskipE=.1; uEconstskipE=.1;
+        uPconstskipE=uPconstskipP; uEconstskipE=uEconstskipP;
         uPthetaP = 0:uPthetaskipP:2*pi-uPthetaskipP; %.177
-        uPconstP = .1:uPconstskipP:.5;
+        uPconstP = .01:uPconstskipP:umaxPur;
         uEthetaP = 0:uEthetaskipP:2*pi-uEthetaskipP; %.097
-        uEconstP = .1:uEconstskipP:.5;
+        uEconstP = .01:uEconstskipP:umaxEva;
         uPthetaE = 0:uPthetaskipE:2*pi-uPthetaskipP; %.177
-        uPconstE = .1:uPconstskipE:.5;
+        uPconstE = .01:uPconstskipE:umaxPur;
         uEthetaE = 0:uEthetaskipE:2*pi-uEthetaskipP; %.097
-        uEconstE = .1:uEconstskipE:.5;
+        uEconstE = .01:uEconstskipE:umaxEva;
         
         for jk=1:fineificationSteps+1
             %get NE controls
@@ -270,8 +263,8 @@ for MCL=1:MCmax
             uEconstskipE=uEconstskipE*2/scaleRed; uEthetaskipE=uEthetaskipE*2/scaleRed;
         end
         
-        uphist=[uphist uPurTrue];
-        uehist=[uehist uEvaTrue];
+        uphist=[uphist uPurTrue]; %#ok
+        uehist=[uehist uEvaTrue]; %#ok
         
         %process noise
         if flagUseDetm==1 %deterministic behavior
@@ -282,13 +275,13 @@ for MCL=1:MCmax
             nE=cholQ0e_T*randn(nV,1);
         end
         %Propagate states
-        xPur=A_tr*xPur+B_tr*uPurTrue+Gammak*nP;
-        xEva=A_tr*xEva+B_tr*uEvaTrue+Gammak*nE;
+%        xPur=A_tr*xPur+B_tr*uPurTrue+Gammak*nP;
+%        xEva=A_tr*xEva+B_tr*uEvaTrue+Gammak*nE;
 %         
 %         %Does it bounce off of a wall?
         wallbounceP=0; wallbounceE=0;
-%         [xPur,wallbounceP]=checkWallBounceAndPropagateDynamics(xPur,uPurTrue,cdd,dt,nP,wallPoints,numObj);
-%         [xEva,wallbounceE]=checkWallBounceAndPropagateDynamics(xEva,uEvaTrue,cdd,dt,nE,wallPoints,numObj);
+        [xPur,wallbounceP]=checkWallBounceAndPropagateDynamics(xPur,uPurTrue,cdd,dt,nP,wallPoints,numObj);
+        [xEva,wallbounceE]=checkWallBounceAndPropagateDynamics(xEva,uEvaTrue,cdd,dt,nE,wallPoints,numObj);
         
         
         if flagPlotArena==1
@@ -308,11 +301,19 @@ for MCL=1:MCmax
             purPlot=plot(xPur(1),xPur(2),'g*');
             evaPlot=plot(xEva(1),xEva(2),'r*');
             axis(axisSet);
+            legend(strcat('t=',num2str(i)));
         end
         
         %Measurement
-        zEva=Hstack*[xPur;xEva]+cholR0E_T*randn(nZ,1);
-        zPur=Hstack*[xPur;xEva]+cholR0E_T*randn(nZ,1);
+        if flagUseDetm==1
+            zE=randn(nZ,1);
+            zP=randn(nZ,1);
+        else
+            zE=zeros(nZ,1);
+            zP=randn(nZ,1);
+        end
+        zEva=Hstack*[xPur;xEva]+cholR0E_T*zE;
+        zPur=Hstack*[xPur;xEva]+cholR0E_T*zP;
         Astack=[A_tr zerosNX; zerosNX A_tr]; Bstack=[B_tr zeros(4,2); zeros(4,2) B_tr];
         uCombPur=[uPurTrue;uEvaExpected];
         uCombEva=[uPurExpected;uEvaTrue];
@@ -330,13 +331,10 @@ for MCL=1:MCmax
         xPpur=xstackP(1:nX); xEpur=xstackP(nX+1:end); xPeva=xstackE(1:nX); xEeva=xstackE(nX+1:end);
         
         %Various outputs
-%        kHist=KmatE(:,:,:,uClassEe)
-%        kE=KmatE(:,:,1,uClassEe)
-%        kP=KmatP(:,:,1,uClassPp)
         uP=uPurTrue
         uE=uEvaTrue
-%        xPurLoc=xPur
-%        xEvaLoc=xEva
+        xPurLoc=xPur
+        xEvaLoc=xEva
         
         if flagPlotAsGo==1
             figure(42);delete(gameStatePlot)

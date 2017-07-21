@@ -3,6 +3,8 @@ bounceFlag=0;  %bounceFlag=1 if it hits the wall
 
 %TO DO: HANDLE CASE OF SLIDING OFF OF WALL WHEN WALL ENDS
 
+dt_iter=.01; %fraction of dt to use in refinement
+
 nX=length(x0);
 eyeHalfNX=eye(nX/2); zerosHalfNX=zeros(nX/2,nX/2);
 A_tr=[eyeHalfNX (1*dt-cdd*dt^2/2)*eyeHalfNX; zerosHalfNX (1-cdd*dt)*eyeHalfNX];
@@ -21,7 +23,7 @@ else
     tt=0; %internal time var
     xS=x0;
     ucon=u_control;
-    while contOuterLoop==1
+    while contOuterLoop==1 %handles multiple wall collisions
         uMin=9001;
         iter=iter+1;
         for i2=1:length(numObj)
@@ -42,6 +44,7 @@ else
             B_temp=[tr^2/2*eyeHalfNX; tr*eyeHalfNX];
             Gamma_temp=[tr^2/2*eyeHalfNX; tr*eyeHalfNX];
             xS=A_temp*xS+B_temp*ucon+Gamma_temp*nPvec;
+            tt=tt+dt; %breaks loop
         else
             dumvar=wallPoints{thisWallInd};
             nl=length(dumvar);
@@ -53,7 +56,7 @@ else
             dttemp=0;
             contInnerLoop=1;
             while contInnerLoop==1
-                dttemp=dttemp+dt*.01; %.01% increments
+                dttemp=dttemp+dt*dt_iter; %.01% increments
                 A_temp=[eyeHalfNX (1*dttemp-cdd*dttemp^2/2)*eyeHalfNX; zerosHalfNX (1-cdd*dttemp)*eyeHalfNX];
                 B_temp=[dttemp^2/2*eyeHalfNX; dttemp*eyeHalfNX];
                 Gamma_temp=[dttemp^2/2*eyeHalfNX; dttemp*eyeHalfNX];
@@ -67,14 +70,22 @@ else
                 
             end
             
-            tr=dttemp-dt*.01; %time remaining to next collision
+            tt=tt+(dttemp-dt*dt_iter);
+            tr=dttemp-dt*dt_iter; %time remaining to next collision
             A_temp=[eyeHalfNX (1*tr-cdd*tr^2/2)*eyeHalfNX; zerosHalfNX (1-cdd*tr)*eyeHalfNX];
             B_temp=[tr^2/2*eyeHalfNX; tr*eyeHalfNX];
-            Gamma_temp=[tr^2/2*eyeHalfNX; tr*eyeHalfNX];
-            xS=A_temp*xS+B_temp*ucon+Gamma_temp*nPvec;
-            
+%            ucon(2)=0;
+%            xS(4)=0;
             ucon=dot(u_control,wallVec)*sign(dot(u_control,wallVec))*wallVec;
-            xS(nX/2+1:nX)=dot(xS(nX/2+1:nX),wallVec)*sign(dot(xS(nX/2+1:nX),wallVec))*wallVec
+            xS(nX/2+1:nX)=dot(xS(nX/2+1:nX),wallVec)*sign(dot(xS(nX/2+1:nX),wallVec))*wallVec;
+            Gamma_temp=[tr^2/2*eyeHalfNX; tr*eyeHalfNX];
+            GammakTimes_nP=Gamma_temp*nPvec;
+%            GammakTimes_nP(4)=0;
+            GammakTimes_nP(nX/2+1:nX)=dot(GammakTimes_nP(nX/2+1:nX),wallVec)*sign(dot(GammakTimes_nP(nX/2+1:nX),wallVec))*wallVec;
+            xS=A_temp*xS+B_temp*ucon+GammakTimes_nP;
+
+%             ucon=dot(u_control,wallVec)*sign(dot(u_control,wallVec))*wallVec;
+%             xS(nX/2+1:nX)=dot(xS(nX/2+1:nX),wallVec)*sign(dot(xS(nX/2+1:nX),wallVec))*wallVec;
         end
         
         if iter>=50 || tt>=dt
