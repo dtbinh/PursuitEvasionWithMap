@@ -26,7 +26,7 @@ mapStart=[1;1;2]; mapEnd=[4;4;2];
 [nmod,allValidPaths]=countPaths3D(map,zeros(size(map)),mapStart,mapEnd,0,[],{});
 pointlist=convertNodeLocationsToXYZ(allValidPaths,map);
 %solve game for pursuer
-[nashPpur,nashEpur]=solveMazeGame(tf,xvajPpurEst,xvajEpurEst,pointlist,pointlist);
+[nashPpur,nashEpur,eqLoc]=solveMazeGame(tf,xvajPpurEst,xvajEpurEst,pointlist,pointlist);
 %postprocess into waypoints lists AND expected weighting of each set
 utemp=genControlsFromNashmatAndWaypoints(nashPpur,xvajPpurEst(1:3),pointlist);
 uPurTrueProb=utemp.probability; uPurTrueTraj=utemp.waypoints;
@@ -35,6 +35,8 @@ uEvaExpectedProb=utemp.probability; uEvaExpectedTraj=utemp.waypoints;
 %choose a set of waypoints (for case with max(nashP)!=1)
 uPurTrueIndex=randsample(length(nashPpur),1,true,nashPpur);
 uPurTrueWaypoints=uPurTrueTraj{uPurTrueIndex};
+uPurTruePossible=find(nashPpur>0);
+uEvaExpectedPossible=find(nashEpur>0);
 
 %[uP_expected,uE_true]=solveMazeGame(xvajPpurEst,xvajEpurEst,pointlist,pointlist);
 

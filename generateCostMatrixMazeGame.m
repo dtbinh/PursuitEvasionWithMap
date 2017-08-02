@@ -94,7 +94,7 @@ for iP=1:numPathsP
         end
         
         for iE=1:countpathsE %can also do shortest maze-end solution for xPur to xEva instead of through-object linear distance
-            JPrun=0; JErun=0;
+            JpRun=0; JeRun=0;
             if Qpur>0 || Qeva>0
                 e_xdiff=p_xP-p_xElist{iE};
                 e_ydiff=p_yP-p_yElist{iE};
@@ -102,14 +102,14 @@ for iP=1:numPathsP
                 ex2=dot(e_xdiff,e_xdiff); ey2=dot(e_ydiff,e_ydiff); ez2=dot(e_zdiff,e_zdiff);
             end
             if Qpur>0
-                JPrun=-Qpur*(ex2+ey2+ez2);
+                JpRun=Qpur*(ex2+ey2+ez2);
             end
             if Qeva>0
-                JErun=Qeva*(ex2+ey2+ez2);
+                JeRun=-Qeva*(ex2+ey2+ez2);
             end
             eDiff=xyzPend-xyzEend(:,iE);
-            JP(cc,iE)=Rpur*JuP-eDiff'*Qfpur*eDiff+JPrun;
-            JE(cc,iE)=JuEmat(iE)+eDiff'*Qfeva*eDiff+JErun;
+            JP(cc,iE)=Rpur*JuP+eDiff'*Qfpur*eDiff+JpRun;
+            JE(cc,iE)=JuEmat(iE)-eDiff'*Qfeva*eDiff+JeRun;
         end
     end
 end
