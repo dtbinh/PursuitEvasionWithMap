@@ -3,7 +3,7 @@ bounceFlag=0;  %bounceFlag=1 if it hits the wall
 
 %TO DO: HANDLE CASE OF SLIDING OFF OF WALL WHEN WALL ENDS
 
-dt_iter=.01; %fraction of dt to use in refinement
+dt_iter=.005; %fraction of dt to use in refinement
 
 nX=length(x0);
 eyeHalfNX=eye(nX/2); zerosHalfNX=zeros(nX/2,nX/2);

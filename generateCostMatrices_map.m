@@ -133,10 +133,20 @@ for i=1:nmodP
                 %set error
                 e=xE-xP;
                 
-                [~,~,nWDP]=nearestWallInformation(xP,wallPoints,numObj);
-                JinvsqWallP=JwallPushbackP*1/norm(nWDP)^2;
-                [~,~,nWDE]=nearestWallInformation(xE,wallPoints,numObj);
-                JinvsqWallE=JwallPushbackE*1/norm(nWDE)^2;
+                %get wall pushback from each object, potential fields
+                %method
+                JinvsqWallP=0;
+                JinvsqWallE=0;
+                %[~,~,nWDE]=nearestWallInformation(xE,wallPoints,numObj);
+                for ijk=1:numObj
+                    wpt_temp=wallPoints{ijk};
+                    wpt=[wpt_temp wpt_temp];
+                    for ijk1=1:length(wpt_temp)
+                        p1=wpt(:,ijk1); p2=wpt(:,ijk1+1);
+                        JinvsqWallP=JinvsqWallP+JwallPushbackP*1/distToLine(xP,p1,p2)^2;
+                        JinvsqWallE=JinvsqWallE+JwallPushbackE*1/distToLine(xE,p1,p2)^2;
+                    end
+                end
                 
                 if JhitP==0
                     JspeedHitP=0;

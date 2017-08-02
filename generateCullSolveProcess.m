@@ -38,11 +38,11 @@ nmod_pur_temp=length(uconPtemp); nmod_eva_temp=length(uconEtemp);
 mapEdges; %load wall locations into memory
 JhitvelP=0;
 JhitvelE=JhitvelP;
-JwallPushbackP=.01;
+JwallPushbackP=.0175;
 JwallPushbackE=JwallPushbackP;
 jhit0=15; %relative speed cushion for wall impact
 
-if vWW==-1
+if vWW<0
     uconPcull=uconPtemp;
     uconEcull=uconEtemp;
     nmod_pur=nmod_pur_temp;
@@ -51,7 +51,7 @@ else
     numSafeControls=0;
     for i1=1:nmod_pur_temp
         uhist=uconPtemp(:,:,:,i1);  %Should check for collisions from x0=left of player and x0=right of player
-        isControlSafe=isSafeFromFutureCollision(ttf,xPurEst,A_tr,B_tr,uhist,wallPoints,numObj,vWW);
+        isControlSafe=isSafeFromFutureCollision(ttf,xPurEst,A_tr,B_tr,uhist,wallPoints,numObj,vWW,0);
         if isControlSafe==1
             numSafeControls=numSafeControls+1;
             uconPcull(:,:,:,numSafeControls)=uconPtemp(:,:,:,i1);
@@ -68,7 +68,7 @@ else
     numSafeControls=0;
     for i1=1:nmod_eva_temp
         uhist=uconEtemp(:,:,:,i1);
-        isControlSafe=isSafeFromFutureCollision(ttf,xEvaEst,A_tr,B_tr,uhist,wallPoints,numObj,vWW);
+        isControlSafe=isSafeFromFutureCollision(ttf,xEvaEst,A_tr,B_tr,uhist,wallPoints,numObj,vWW,0);
         if isControlSafe
             %fprintf('foundsafeE\n')
             numSafeControls=numSafeControls+1;

@@ -2,16 +2,12 @@ clear;clc;
 %closes the loop for control switching in cluttered maps
 
 %NOTES
-% work out better metric for safe shifting to account for covariance matrix
-% shift wall by virtual wall amount in isSafeFromFutureCollision
-% vWW handling would be better if it provided a "reward" for moving away
-%   from the wall rather than culling those that don't move away
 %
 %BUGS
 %If a point is exactly vWW away from a wall, then all controls are unsafe
 %vWW is still rejecting all controls if too close
 
-tmax=25;
+tmax=30;
 lookAheadTime=1; %number of steps to look ahead in optimization; set 0 to use t_remaining instead
 dt=1;
 MCmax=1;
@@ -21,11 +17,11 @@ scaleRed=8; %each fineification step has scaleRed+1 elements in each state. DO N
 %nSim=1;
 virtualWallWidth=0; %if within vWW of wall, only consider strategies that
                      %move away from the wall.  Set ==0 to ignore.  Set ==-1
-                     %for free space
+                     %for free space PE
 
 flagDiminishHorizonNearNSim=1;  %if ==1, consider lookAheadTime
          %if TRemain>lookAheadTime, use TRemain if TRemain<lookAheadTime
-flagUseDetm=1;  %zero noise if flag==1
+flagUseDetm=1;  %flag==1 -> detm
 flagUseFeedback=0; %generate control history via feedback
 flagUseModeControlInsteadOfMean=1;
 
@@ -103,7 +99,10 @@ for MCL=1:MCmax
     
     
     xEva=[1;.3;0;0];
-    xPur=[.11;.45;.1;0];
+    xPur=[.11;.5;.1;0];
+    
+%     xPur=[3.0801;0.3022;0.3749;0.0264];
+%     xEva=[3.6618;0.3666;0.3745;0.0406];
     
     umaxPur=.1;
     umaxEva=.1;
@@ -233,6 +232,9 @@ for MCL=1:MCmax
         uEthetaE = 0:uEthetaskipE:2*pi-uEthetaskipP; %.097
         uEconstE = .01:uEconstskipE:umaxEva;
         
+        xpurPest=xPpur
+        xevaPest=xEpur
+        
         for jk=1:fineificationSteps+1
             %get NE controls
             [uPurTrue,uEvaExpected]=generateCullSolveProcess(ttf,uPconstP,uPthetaP,uEconstP,uEthetaP,xPpur,xEpur,virtualWallWidth);
@@ -313,7 +315,7 @@ for MCL=1:MCmax
             zP=randn(nZ,1);
         end
         zEva=Hstack*[xPur;xEva]+cholR0E_T*zE;
-        zPur=Hstack*[xPur;xEva]+cholR0E_T*zP;
+        zPur=Hstack*[xPur;xEva]+cholR0P_T*zP;
         Astack=[A_tr zerosNX; zerosNX A_tr]; Bstack=[B_tr zeros(4,2); zeros(4,2) B_tr];
         uCombPur=[uPurTrue;uEvaExpected];
         uCombEva=[uPurExpected;uEvaTrue];
@@ -327,6 +329,13 @@ for MCL=1:MCmax
             [xstackE,P_eva]=linearKFStep(x0e,zEva,Astack,Bstack,GammaLinStackE,P_eva,Q0stack,uCombEva,Hstack,R0E,[xPur;xEva]);
         end
         
+        if flagUseDetm==1
+            xstackP=[xPur;xEva];
+            xstackE=[xPur;xEva];
+        else
+            xstackP=[xPur;xEva]+cholR0P_T*randn(nZ,1);
+            xstackE=[xPur;xEva]+cholR0P_T*randn(nZ,1);
+        end
         
         xPpur=xstackP(1:nX); xEpur=xstackP(nX+1:end); xPeva=xstackE(1:nX); xEeva=xstackE(nX+1:end);
         

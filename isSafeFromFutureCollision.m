@@ -1,5 +1,5 @@
 function [isSafe,nWI,nPPI,nWD] = isSafeFromFutureCollision(ttf,xp1,A_tr,B_tr,...
-            uhist,wallPoints,numObj,virtualWallWidth)
+            uhist,wallPoints,numObj,virtualWallWidth,umax)
 %Only consider strategies that stay outside of virtualWallWidth of a
 %physical wall.  If xp1 is already within vWW of a wall, then this will
 %only present strategies that go through it.
@@ -17,6 +17,9 @@ function [isSafe,nWI,nPPI,nWD] = isSafeFromFutureCollision(ttf,xp1,A_tr,B_tr,...
 if nargin<=7
     virtualWallWidth=0;
 end
+if nargin<=8
+    umax=0;
+end
 nWI=0; nPPI=0; nWD=9001;
 nX=length(xp1);
 contloop=true;
@@ -26,7 +29,6 @@ if virtualWallWidth==0
     while contloop %break loop immediately if collision flag seen
         tvec=[]; uvec=[];
         ncount=ncount+1;
-        if ncount>=ttf||ncount>=20; contloop=false; end
         xp2=A_tr*xp1+B_tr*uhist(:,:,ncount);
         xp2Shift=xp2*1; %work out better safe shifting metric
         for i2=1:numObj %iterate through objects
@@ -47,6 +49,7 @@ if virtualWallWidth==0
             end
         end
         xp1=xp2;
+        if ncount>=ttf||ncount>=20; contloop=false; end
     end
 else
     
@@ -59,8 +62,6 @@ else
     nPPI=nPPI_temp;
     
     if nWD_temp<virtualWallWidth
-        
-        %DO STUFF HERE
         %same loop as before but only consider strategies that "collide" with
         %shifted virtual wall
         countPassagesThroughVW=0;
@@ -68,7 +69,12 @@ else
             ncount=ncount+1;
             if ncount>=ttf||ncount>=20; contloop=false; end
             xp2=A_tr*xp1+B_tr*uhist(:,:,ncount);
-            xp2Shift=xp2*1; %work out better safe shifting metric
+            if umax>0
+                timeStepsToStop=norm(A_tr(nX/2+1:nX,nX/2+1:nX)*xp2(nX/2+1:end))/(umax*dt^2/2);
+                xp2Shift=xp2*timeStepsToStop;
+            else
+                xp2Shift=xp2;
+            end
             for i2=1:numObj
                 wpttemp=wallPoints{i2};
                 wpt=[wpttemp wpttemp wpttemp]; %for wraparound
@@ -121,8 +127,8 @@ else
             end
             xp1=xp2;
         end
-        if mod(countPassagesThroughVW,2)==1 && isSafe==1
-            isSafe=1; %if it passes through the VW an odd number of times AND
+        if countPassagesThroughVW==1 && isSafe==1
+            isSafe=1; %if it passes through the VW exactly one time AND
                       %it is safe from other collisions, then this control
                       %is safe.
         else
@@ -153,7 +159,6 @@ else
         end
         
     end
-    
     
 %     if nWD<=virtualWallWidth  %only move THROUGH virtual wall if player is too close to it
 %     else
